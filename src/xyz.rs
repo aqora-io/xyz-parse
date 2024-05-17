@@ -1,6 +1,7 @@
 use crate::molecule::{Molecule, MoleculeParseError};
 use std::{error::Error, fmt, str::FromStr};
 
+/// An error that can occur while parsing an [`Xyz`]
 #[derive(Debug, Clone)]
 pub enum XyzParseError<'a> {
     InvalidMolecule(usize, MoleculeParseError<'a>),
@@ -32,6 +33,7 @@ impl Error for XyzParseError<'static> {
     }
 }
 
+/// A list of molecules
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Xyz<'a> {
     pub molecules: Vec<Molecule<'a>>,
@@ -88,6 +90,7 @@ mod tests {
     use super::*;
     use crate::{atom::Atom, molecule::Molecule};
     use rust_decimal::Decimal;
+    use std::borrow::Cow;
 
     const PYRIDINE: &str = r#"11
 

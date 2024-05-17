@@ -2,13 +2,23 @@
 name = "xyz-parse"
 version = "0.1.0"
 edition = "2021"
+authors = ["Julian Popescu <jpopesculian@gmail.com>"]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+homepage = "https://github.com/aqora-io/xyz-parse"
+documentation = "https://docs.rs/xyz-parse/"
+repository = "https://github.com/aqora-io/xyz-parse"
+description = "Simple parser for the XYZ file format"
+keywords = ["xyz", "chemistry", "parser", "parse"]
+categories = ["parsing"]
 
 [lib]
+path = "src/lib.rs"
 name = "xyz_parse"
 crate-type = ["cdylib"]
 
 [features]
-default = ["python"]
+default = []
 python = ["pyo3"]
 
 [dependencies]

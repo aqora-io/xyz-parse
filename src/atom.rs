@@ -1,6 +1,7 @@
 use rust_decimal::Decimal;
 use std::{borrow::Cow, error::Error, fmt, str::FromStr};
 
+/// An error that can occur when parsing an [`Atom`]
 #[derive(Debug, Clone)]
 pub enum AtomParseError<'a> {
     InvalidCoordinate(Cow<'a, str>, rust_decimal::Error),
@@ -36,6 +37,7 @@ impl<'a> fmt::Display for AtomParseError<'a> {
 
 impl Error for AtomParseError<'static> {}
 
+/// An atom in a molecule
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Atom<'a> {
     pub symbol: Cow<'a, str>,

@@ -1,6 +1,7 @@
 use crate::atom::{Atom, AtomParseError};
 use std::{borrow::Cow, error::Error, fmt, str::FromStr};
 
+/// An error that can occur when parsing a [`Molecule`]
 #[derive(Debug, Clone)]
 pub enum MoleculeParseError<'a> {
     NoAtomNumber,
@@ -57,6 +58,7 @@ impl Error for MoleculeParseError<'static> {
     }
 }
 
+/// A molecule
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Molecule<'a> {
     pub comment: Cow<'a, str>,
