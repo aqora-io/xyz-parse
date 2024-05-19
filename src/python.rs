@@ -1,6 +1,10 @@
 use crate::{atom::Atom, molecule::Molecule, xyz::Xyz};
-use pyo3::{create_exception, exceptions::PyException, prelude::*, types::PyType};
-use rust_decimal::Decimal;
+use pyo3::{
+    create_exception,
+    exceptions::PyException,
+    prelude::*,
+    types::{PyList, PyString, PyTuple, PyType},
+};
 use std::borrow::Cow;
 
 create_exception!(xyz_parse, ParseError, PyException);
@@ -17,181 +21,214 @@ fn xyz_parse(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
 #[pyclass(name = "Atom", module = "xyz_parse")]
 #[derive(Debug, Clone)]
-pub struct PyAtom(Atom<'static>);
+pub struct PyAtom {
+    #[pyo3(get, set)]
+    pub symbol: Py<PyString>,
+    #[pyo3(get, set)]
+    pub x: Py<PyAny>,
+    #[pyo3(get, set)]
+    pub y: Py<PyAny>,
+    #[pyo3(get, set)]
+    pub z: Py<PyAny>,
+}
+
+impl<'a> Atom<'a> {
+    pub fn to_py(&self, py: Python<'a>) -> PyAtom {
+        PyAtom {
+            symbol: PyString::new_bound(py, &self.symbol).unbind(),
+            x: self.x.to_object(py),
+            y: self.y.to_object(py),
+            z: self.z.to_object(py),
+        }
+    }
+}
+
+impl PyAtom {
+    pub fn to_rust(&self, py: Python<'_>) -> PyResult<Atom<'static>> {
+        Ok(Atom {
+            symbol: Cow::Owned(self.symbol.extract(py)?),
+            x: self.x.extract(py)?,
+            y: self.y.extract(py)?,
+            z: self.z.extract(py)?,
+        })
+    }
+}
 
 #[pymethods]
 impl PyAtom {
     #[new]
-    fn new(symbol: String, x: Decimal, y: Decimal, z: Decimal) -> Self {
-        PyAtom(Atom {
-            symbol: Cow::Owned(symbol),
-            x,
-            y,
-            z,
-        })
+    fn new(symbol: Py<PyString>, x: Py<PyAny>, y: Py<PyAny>, z: Py<PyAny>) -> Self {
+        PyAtom { symbol, x, y, z }
     }
 
     #[classmethod]
-    fn parse(_: &Bound<'_, PyType>, input: &str) -> PyResult<PyAtom> {
+    fn parse(_: &Bound<'_, PyType>, py: Python<'_>, input: &str) -> PyResult<PyAtom> {
         Atom::parse(input)
-            .map(|atom| PyAtom(atom.into_owned()))
+            .map(|atom| atom.to_py(py))
             .map_err(|err| ParseError::new_err(err.to_string()))
     }
 
     #[getter]
-    fn get_symbol(&self) -> Cow<'_, str> {
-        self.0.symbol.clone()
+    fn coordinates<'py>(&self, py: Python<'py>) -> Bound<'py, PyTuple> {
+        PyTuple::new_bound(
+            py,
+            [
+                self.x.clone_ref(py),
+                self.y.clone_ref(py),
+                self.z.clone_ref(py),
+            ],
+        )
     }
 
-    #[setter]
-    fn set_symbol(&mut self, symbol: String) {
-        self.0.symbol = Cow::Owned(symbol);
+    fn __str__(&self, py: Python<'_>) -> PyResult<String> {
+        Ok(self.to_rust(py)?.to_string())
     }
 
-    #[getter]
-    fn get_x(&self) -> Decimal {
-        self.0.x
-    }
-
-    #[setter]
-    fn set_x(&mut self, decimal: Decimal) {
-        self.0.x = decimal;
-    }
-
-    #[getter]
-    fn get_y(&self) -> Decimal {
-        self.0.y
-    }
-
-    #[setter]
-    fn set_y(&mut self, decimal: Decimal) {
-        self.0.y = decimal;
-    }
-
-    #[getter]
-    fn get_z(&self) -> Decimal {
-        self.0.z
-    }
-
-    #[setter]
-    fn set_z(&mut self, decimal: Decimal) {
-        self.0.z = decimal;
-    }
-
-    #[getter]
-    fn coordinates(&self) -> (Decimal, Decimal, Decimal) {
-        (self.0.x, self.0.y, self.0.z)
-    }
-
-    fn __str__(&self) -> String {
-        self.0.to_string()
-    }
-
-    fn __repr__(&self) -> String {
-        format!("{:?}", self.0)
+    fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
+        Ok(format!("{:?}", self.to_rust(py)?))
     }
 }
 
 #[pyclass(name = "Molecule", module = "xyz_parse")]
 #[derive(Debug, Clone)]
-pub struct PyMolecule(Molecule<'static>);
+pub struct PyMolecule {
+    #[pyo3(get, set)]
+    pub comment: Py<PyString>,
+    #[pyo3(get, set)]
+    pub atoms: Py<PyList>,
+}
+
+impl<'a> Molecule<'a> {
+    pub fn to_py(&self, py: Python<'a>) -> PyMolecule {
+        PyMolecule {
+            comment: PyString::new_bound(py, &self.comment).unbind(),
+            atoms: PyList::new_bound(py, self.atoms.iter().map(|atom| atom.to_py(py).into_py(py)))
+                .unbind(),
+        }
+    }
+}
+
+impl PyMolecule {
+    pub fn to_rust(&self, py: Python<'_>) -> PyResult<Molecule<'static>> {
+        Ok(Molecule {
+            comment: Cow::Owned(self.comment.extract(py)?),
+            atoms: self
+                .atoms
+                .bind(py)
+                .iter()
+                .map(|atom| atom.extract::<PyAtom>()?.to_rust(py))
+                .collect::<PyResult<_>>()?,
+        })
+    }
+
+    pub fn py_atoms(&self, py: Python<'_>) -> PyResult<Vec<PyAtom>> {
+        self.atoms
+            .bind(py)
+            .iter()
+            .map(|atom| atom.extract::<PyAtom>())
+            .collect()
+    }
+}
 
 #[pymethods]
 impl PyMolecule {
     #[new]
-    fn new(comment: String, atoms: Vec<PyAtom>) -> Self {
-        PyMolecule(Molecule {
-            comment: Cow::Owned(comment),
-            atoms: atoms.into_iter().map(|atom| atom.0).collect(),
-        })
+    fn new(comment: Py<PyString>, atoms: Py<PyList>) -> Self {
+        PyMolecule { comment, atoms }
     }
 
     #[classmethod]
-    fn parse(_: &Bound<'_, PyType>, input: &str) -> PyResult<PyMolecule> {
+    fn parse(_: &Bound<'_, PyType>, py: Python<'_>, input: &str) -> PyResult<PyMolecule> {
         Molecule::parse(input)
-            .map(|molecule| PyMolecule(molecule.into_owned()))
+            .map(|molecule| molecule.to_py(py))
             .map_err(|err| ParseError::new_err(err.to_string()))
     }
 
     #[getter]
-    fn get_comment(&self) -> Cow<'static, str> {
-        self.0.comment.clone()
-    }
-
-    #[setter]
-    fn set_comment(&mut self, comment: String) {
-        self.0.comment = Cow::Owned(comment);
+    fn symbols<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
+        Ok(PyList::new_bound(
+            py,
+            self.py_atoms(py)?.iter().map(|atom| atom.symbol.bind(py)),
+        ))
     }
 
     #[getter]
-    fn get_atoms(&self) -> Vec<PyAtom> {
-        self.0
-            .atoms
-            .iter()
-            .map(|atom| PyAtom(atom.clone()))
-            .collect()
+    fn coordinates<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
+        Ok(PyList::new_bound(
+            py,
+            self.py_atoms(py)?.iter().map(|atom| atom.coordinates(py)),
+        ))
     }
 
-    #[setter]
-    fn set_atoms(&mut self, atoms: Vec<PyAtom>) {
-        self.0.atoms = atoms.into_iter().map(|atom| atom.0).collect();
+    fn __str__(&self, py: Python<'_>) -> PyResult<String> {
+        Ok(self.to_rust(py)?.to_string())
     }
 
-    fn __str__(&self) -> String {
-        self.0.to_string()
-    }
-
-    fn __repr__(&self) -> String {
-        format!("{:?}", self.0)
+    fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
+        Ok(format!("{:?}", self.to_rust(py)?))
     }
 }
 
 #[pyclass(name = "Xyz", module = "xyz_parse")]
 #[derive(Debug, Clone)]
-pub struct PyXyz(Xyz<'static>);
+pub struct PyXyz {
+    #[pyo3(get, set)]
+    pub molecules: Py<PyList>,
+}
+
+impl<'a> Xyz<'a> {
+    pub fn to_py(&self, py: Python<'a>) -> PyXyz {
+        PyXyz {
+            molecules: PyList::new_bound(
+                py,
+                self.molecules
+                    .iter()
+                    .map(|molecule| molecule.to_py(py).into_py(py)),
+            )
+            .unbind(),
+        }
+    }
+}
+
+impl PyXyz {
+    pub fn to_rust(&self, py: Python<'_>) -> PyResult<Xyz<'static>> {
+        Ok(Xyz {
+            molecules: self
+                .molecules
+                .bind(py)
+                .iter()
+                .map(|molecule| molecule.extract::<PyMolecule>()?.to_rust(py))
+                .collect::<PyResult<_>>()?,
+        })
+    }
+}
 
 #[pymethods]
 impl PyXyz {
     #[new]
-    fn new(molecules: Vec<PyMolecule>) -> Self {
-        PyXyz(Xyz {
-            molecules: molecules.into_iter().map(|molecule| molecule.0).collect(),
-        })
+    fn new(molecules: Py<PyList>) -> Self {
+        PyXyz { molecules }
     }
 
     #[classmethod]
-    fn parse(_: &Bound<'_, PyType>, input: &str) -> PyResult<PyXyz> {
+    fn parse(_: &Bound<'_, PyType>, py: Python<'_>, input: &str) -> PyResult<PyXyz> {
         Xyz::parse(input)
-            .map(|xyz| PyXyz(xyz.into_owned()))
+            .map(|xyz| xyz.to_py(py))
             .map_err(|err| ParseError::new_err(err.to_string()))
     }
 
-    #[getter]
-    fn get_molecules(&self) -> Vec<PyMolecule> {
-        self.0
-            .molecules
-            .iter()
-            .map(|molecule| PyMolecule(molecule.clone()))
-            .collect()
+    fn __str__(&self, py: Python<'_>) -> PyResult<String> {
+        Ok(self.to_rust(py)?.to_string())
     }
 
-    #[setter]
-    fn set_molecules(&mut self, molecules: Vec<PyMolecule>) {
-        self.0.molecules = molecules.into_iter().map(|molecule| molecule.0).collect();
-    }
-
-    fn __str__(&self) -> String {
-        self.0.to_string()
-    }
-
-    fn __repr__(&self) -> String {
-        format!("{:?}", self.0)
+    fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
+        Ok(format!("{:?}", self.to_rust(py)?))
     }
 }
 
 #[pyfunction]
-fn parse_xyz(input: &str) -> PyResult<PyXyz> {
+fn parse_xyz(py: Python<'_>, input: &str) -> PyResult<PyXyz> {
     Xyz::parse(input)
-        .map(|xyz| PyXyz(xyz.into_owned()))
+        .map(|xyz| xyz.to_py(py))
         .map_err(|err| ParseError::new_err(err.to_string()))
 }

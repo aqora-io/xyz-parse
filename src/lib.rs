@@ -15,8 +15,10 @@ mod atom;
 mod molecule;
 mod xyz;
 
-#[cfg(feature = "python")]
+#[cfg(feature = "pyo3")]
 mod python;
+
+pub use rust_decimal;
 
 pub use atom::*;
 pub use molecule::*;

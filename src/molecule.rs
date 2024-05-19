@@ -1,4 +1,5 @@
 use crate::atom::{Atom, AtomParseError};
+use rust_decimal::Decimal;
 use std::{borrow::Cow, error::Error, fmt, str::FromStr};
 
 /// An error that can occur when parsing a [`Molecule`]
@@ -118,6 +119,14 @@ impl<'a> Molecule<'a> {
                 .map(|atom| atom.into_owned())
                 .collect(),
         }
+    }
+
+    pub fn symbols(&self) -> impl ExactSizeIterator<Item = &str> {
+        self.atoms.iter().map(|atom| atom.symbol.as_ref())
+    }
+
+    pub fn coordinates(&self) -> impl ExactSizeIterator<Item = [Decimal; 3]> + '_ {
+        self.atoms.iter().map(|atom| atom.coordinates())
     }
 }
 

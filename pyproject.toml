@@ -13,4 +13,4 @@ classifiers = [
 dynamic = ["version"]
 
 [tool.maturin]
-features = ["python"]
+features = ["pyo3-lib"]
